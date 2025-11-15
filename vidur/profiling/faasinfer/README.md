@@ -131,9 +131,25 @@ Uses Viduru's existing collective operations profiling.
 
 See [Viduru profiling docs](../../README.md) for details.
 
-## Quick Start: Profile Everything
+## Quick Start: Complete Workflow
 
-Use the unified profiling script to run all components:
+### Option 1: Automated End-to-End Workflow
+
+Use the complete workflow script that profiles all components AND generates sim_params.json:
+
+```bash
+bash examples/faasinfer_complete_workflow.sh
+```
+
+This will:
+1. Profile all components (model loading, storage I/O, scaling, compute, network)
+2. Generate `sim_params.json` for each tensor parallel configuration
+3. Validate the generated parameters
+4. Create a summary report
+
+### Option 2: Manual Step-by-Step
+
+**Step 1: Profile All Components**
 
 ```bash
 python -m vidur.profiling.faasinfer.profile_all \
@@ -150,6 +166,25 @@ This will run:
 3. Scaling operations profiling
 4. Compute profiling (MLP + Attention via Viduru)
 5. Network profiling (AllReduce + Send-Recv via Viduru)
+
+**Step 2: Generate sim_params.json**
+
+```bash
+python -m vidur.profiling.faasinfer.generate_sim_params \
+    --model meta-llama/Meta-Llama-3-8B \
+    --device a100 \
+    --tensor_parallel_size 1 \
+    --output sim_params.json \
+    --pretty
+```
+
+This generates the six high-fidelity parameters required by SimFaaSInfer:
+- `gpu_memory_mb` - GPU memory consumed by model
+- `prefill_time_per_token_ms` - Time per prompt token (TTFT)
+- `decode_time_per_token_ms` - Time per output token (TBT)
+- `load_time_dram_ms` - Cold start from DRAM cache
+- `load_time_ssd_ms` - Cold start from SSD cache
+- `load_time_remote_ms` - Cold start from remote storage
 
 ## Storage Tiers
 
@@ -316,6 +351,34 @@ Adjust profiling granularity:
 - Ensure profiling scripts have completed successfully
 - Check output directories: `data/profiling/faasinfer/`
 - Use `--all` flag to profile all components
+
+## Output: sim_params.json
+
+The final output is a `sim_params.json` file containing six parameters for SimFaaSInfer:
+
+```json
+{
+  "model_name": "meta-llama/Meta-Llama-3-8B",
+  "device": "a100",
+  "tensor_parallel_size": 1,
+  "gpu_memory_mb": 15360.00,
+  "prefill_time_per_token_ms": 0.0842,
+  "decode_time_per_token_ms": 0.1634,
+  "load_time_dram_ms": 1234.56,
+  "load_time_ssd_ms": 2345.67,
+  "load_time_remote_ms": 8901.23,
+  "metadata": {
+    "num_layers": 32,
+    "embedding_dim": 4096,
+    "num_q_heads": 32,
+    "num_kv_heads": 8,
+    "vocab_size": 128256,
+    "estimated_parameters": 8030000000
+  }
+}
+```
+
+See `docs/faasinfer_metrics_mapping.md` for complete details on how each parameter is derived from profiling data.
 
 ## Citation
 
